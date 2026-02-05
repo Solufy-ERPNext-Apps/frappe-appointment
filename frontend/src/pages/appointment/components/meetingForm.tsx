@@ -1,3 +1,4 @@
+import { useFrappeGetDocList } from "frappe-react-sdk";
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { motion } from "framer-motion";
@@ -63,10 +64,22 @@ const MeetingForm = ({
   const [searchParams] = useSearchParams();
 
   const { selectedDate, selectedSlot, timeZone } = useAppContext();
+  const { data: users, isLoading: usersLoading } =
+  useFrappeGetDocList("User", {
+    fields: ["name", "full_name", "email"],
+    filters: [["enabled", "=", 1]],
+    limit: 100,
+  });
+  const userDocs =
+  users?.map((user) => ({
+    id: user.name, // ERPNext User ID
+    name: user.full_name || user.name,
+    email: user.email,
+  })) ||  [];
 
   // Replace with your actual user data source
   // For demo, empty array to replicate your problem scenario
-  const userDocs: { id: string; name: string; email: string }[] = [];
+  // const userDocs: { id: string; name: string; email: string }[] = [];
 
   // State to hold existing chairpersons including selected one(s)
   const [existingChairpersons, setExistingChairpersons] = useState<
