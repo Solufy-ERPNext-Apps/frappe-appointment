@@ -50,11 +50,14 @@ const MeetingForm = ({
   onSuccess,
   isMobileView,
 }: MeetingFormProps) => {
+
   const [isParticipantsDropdownOpen, setIsParticipantsDropdownOpen] = useState(false);
   const [participantInput, setParticipantInput] = useState("");
   const [isHostDropdownOpen, setIsHostDropdownOpen] = useState(false);
-  // const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isChairpersonDropdownOpen, setIsChairpersonDropdownOpen] = useState(false);
+  const [existingChairpersons, setExistingChairpersons] = useState<
+    { id: string; name: string }[]
+  >([]);
   const [chairpersonId, setChairpersonId] = useState<string | null>(null);
   const { call: bookMeeting, loading } = useFrappePostCall(
     `frappe_appointment.api.personal_meet.book_time_slot`
@@ -69,15 +72,30 @@ const MeetingForm = ({
     limit: 100,
   });
   const userDocs =
-  users?.map((user) => ({
-    id: user.name, 
-    name: user.chairperson || user.name,
-    email: user.host,
-  })) ||  [];
+  users?.map((user) => {
+    const displayName =
+      user.full_name ||
+      [user.first_name, user.last_name].filter(Boolean).join(" ") ||
+      user.name;
 
-  const [existingChairpersons, setExistingChairpersons] = useState<
-    { id: string; name: string }[]
-  >([]);
+    return {
+      id: user.name,
+      name: displayName,
+      email: user.email,
+    };
+  }) || [];
+  console.log("USERS", users);
+console.log("USERDOCS", userDocs);
+  // const userDocs =
+  // users?.map((user) => ({
+  //   id: user.name, 
+  //   name: user.chairperson || user.name,
+  //   email: user.host,
+  // })) ||  [];
+
+  // const [existingChairpersons, setExistingChairpersons] = useState<
+  //   { id: string; name: string }[]
+  // >([]);
 
   const form = useForm<MeetingFormValues>({
     resolver: zodResolver(meetingFormSchema),
@@ -288,7 +306,7 @@ const MeetingForm = ({
                               onClick={handleAddNewChairperson}
                               className="cursor-pointer p-1 text-blue-500 hover:bg-blue-100"
                             >
-                              Add New Chairperson
+                            Add New Chairperson
                             </li>
                           </ul>
                         </div>
@@ -303,41 +321,6 @@ const MeetingForm = ({
                 </FormItem>
               )}
             />
-
-            {/* Host field */}
-            {/* <FormField
-              control={form.control}
-              name="host"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel
-                    className={`${
-                      form.formState.errors.host ? "text-red-500" : ""
-                    }`}
-                  >
-                    Host{" "}
-                    <span className="text-red-500 dark:text-red-600">*</span>
-                  </FormLabel>
-                  <FormControl>
-                    <Input
-                      disabled={loading}
-                      className={`active:ring-blue-400 focus-visible:ring-blue-400 ${
-                        form.formState.errors.host
-                          ? "active:ring-red-500 focus-visible:ring-red-500"
-                          : ""
-                      }`}
-                      placeholder="host@example.com"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage
-                    className={`${
-                      form.formState.errors.host ? "text-red-500" : ""
-                    }`}
-                  />
-                </FormItem>
-              )}
-            /> */}
              {/* Host field */}
             <FormField
                   control={form.control}
@@ -447,7 +430,7 @@ const MeetingForm = ({
                           ))}
                           <li
                             onClick={() => {
-                              setIsChairpersonDropdownOpen(false);
+                              setIsParticipantsDropdownOpen(false);
                               addParticipant();
                             }}
                             className="cursor-pointer p-1 text-blue-500 hover:bg-blue-100"
