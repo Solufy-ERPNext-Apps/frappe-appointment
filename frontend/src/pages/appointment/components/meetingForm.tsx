@@ -1,13 +1,10 @@
-/**
- * External dependencies.
- */
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { motion } from "framer-motion";
 import z from "zod";
 import { useFrappePostCall } from "frappe-react-sdk";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CalendarPlus, ChevronLeft, CircleAlert, X } from "lucide-react";
+import { CalendarPlus, ChevronLeft, CircleAlert, X, ChevronDown } from "lucide-react";
 import { formatDate } from "date-fns";
 import { toast } from "sonner";
 import { useSearchParams } from "react-router-dom";
@@ -33,17 +30,16 @@ import {
 } from "@/lib/utils";
 import Spinner from "@/components/spinner";
 
-const contactFormSchema = z.object({
-  fullName: z.string().min(2, "Name must be at least 2 characters"),
-  email: z.string().email("Please enter a valid email address"),
-  guests: z.array(z.string().email("Please enter a valid email address")),
+const meetingFormSchema = z.object({
+  chairperson: z.string().min(2, "Chairperson name must be at least 2 characters"),
+  host: z.string().email("Please enter a valid host email address"),
+  participants: z.array(z.string().email("Please enter a valid email address")),
 });
 
-type ContactFormValues = z.infer<typeof contactFormSchema>;
+type MeetingFormValues = z.infer<typeof meetingFormSchema>;
 
 interface MeetingFormProps {
   onBack: VoidFunction;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onSuccess: (data: any) => void;
   durationId: string;
   isMobileView: boolean;
@@ -55,50 +51,53 @@ const MeetingForm = ({
   onSuccess,
   isMobileView,
 }: MeetingFormProps) => {
-  const [isGuestsOpen, setIsGuestsOpen] = useState(false);
-  const [guestInput, setGuestInput] = useState("");
+  const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
+  const [participantInput, setParticipantInput] = useState("");
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);  // For dropdown
   const { call: bookMeeting, loading } = useFrappePostCall(
     `frappe_appointment.api.personal_meet.book_time_slot`
   );
   const [searchParams] = useSearchParams();
 
   const { selectedDate, selectedSlot, timeZone } = useAppContext();
+  const userDocs: any[] = []; // TODO: Replace with actual user data source
 
-  const form = useForm<ContactFormValues>({
-    resolver: zodResolver(contactFormSchema),
+  const form = useForm<MeetingFormValues>({
+    resolver: zodResolver(meetingFormSchema),
     defaultValues: {
-      fullName: "",
-      email: "",
-      guests: [],
+      chairperson: "",
+      host: "",
+      participants: [],
     },
   });
 
-  const handleGuestKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleParticipantKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
-      addGuest();
+      addParticipant();
     }
   };
 
-  const addGuest = () => {
-    const email = guestInput.trim();
+  const addParticipant = () => {
+    const email = participantInput.trim();
     if (email && email.includes("@")) {
-      const currentGuests = form.getValues("guests");
-      if (!currentGuests.includes(email)) {
-        form.setValue("guests", [...currentGuests, email]);
-        setGuestInput("");
+      const currentParticipants = form.getValues("participants");
+      if (!currentParticipants.includes(email)) {
+        form.setValue("participants", [...currentParticipants, email]);
+        setParticipantInput("");  // Clear input after adding
       }
     }
   };
 
-  const removeGuest = (email: string) => {
-    const currentGuests = form.getValues("guests");
+  const removeParticipant = (email: string) => {
+    const currentParticipants = form.getValues("participants");
     form.setValue(
-      "guests",
-      currentGuests.filter((guest) => guest !== email)
+      "participants",
+      currentParticipants.filter((participant) => participant !== email)
     );
   };
-  const onSubmit = (data: ContactFormValues) => {
+
+  const onSubmit = (data: MeetingFormValues) => {
     const extraArgs: Record<string, string> = {};
     searchParams.forEach((value, key) => (extraArgs[key] = value));
     const meetingData = {
@@ -114,9 +113,9 @@ const MeetingForm = ({
       ),
       start_time: selectedSlot.start_time,
       end_time: selectedSlot.end_time,
-      user_name: data.fullName,
-      user_email: data.email,
-      other_participants: data.guests.join(", "),
+      chairperson_name: data.chairperson,
+      host_email: data.host,
+      participants: data.participants.join(", "),
     };
 
     bookMeeting(meetingData)
@@ -157,114 +156,192 @@ const MeetingForm = ({
           <div className="space-y-4">
             <div className="flex gap-3 max-md:flex-col md:items-center md:justify-between">
               <Typography variant="p" className="text-2xl">
-                Your contact info
+                Meeting Schedule
               </Typography>
-              <Typography className="text-sm  mt-1 text-blue-500 dark:text-blue-400">
+              <Typography className="text-sm mt-1 text-blue-500 dark:text-blue-400">
                 <CalendarPlus className="inline-block w-4 h-4 mr-1 md:hidden" />
                 {formatDate(selectedDate, "d MMM, yyyy")}
               </Typography>
             </div>
 
+            {/* Chairperson field */}
             <FormField
               control={form.control}
-              name="fullName"
+              name="chairperson"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel
                     className={`${
-                      form.formState.errors.fullName ? "text-red-500" : ""
+                      form.formState.errors.chairperson ? "text-red-500" : ""
                     }`}
                   >
-                    Full Name{" "}
+                    Chairperson{" "}
                     <span className="text-red-500 dark:text-red-600">*</span>
                   </FormLabel>
                   <FormControl>
-                    <Input
-                      disabled={loading}
-                      className={`active:ring-blue-400 focus-visible:ring-blue-400 ${
-                        form.formState.errors.fullName
-                          ? "active:ring-red-500 focus-visible:ring-red-500"
-                          : ""
-                      }`}
-                      placeholder="John Doe"
-                      {...field}
-                    />
+                    <div className="relative">
+                      <Input
+                        disabled={loading}
+                        className="active:ring-blue-400 focus-visible:ring-blue-400"
+                        placeholder="Select or Add Chairperson"
+                        {...field}
+                      />
+                      <Button
+                        type="button"
+                        className="absolute right-2 top-1/2 transform -translate-y-1/2"
+                        onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                        disabled={loading}
+                      >
+                        <ChevronDown />
+                      </Button>
+                      {isDropdownOpen && (
+                        <div className="absolute z-10 bg-white shadow-md border p-2 w-full mt-1">
+                          <ul>
+                            {Array.isArray(userDocs) && userDocs.length > 0 ? (
+                              userDocs.map((user) => (
+                                <li
+                                  key={user.id}
+                                  onClick={() => {
+                                    form.setValue("chairperson", user.name);
+                                    setIsDropdownOpen(false);
+                                  }}
+                                  className="cursor-pointer p-1 hover:bg-blue-100"
+                                >
+                                  {user.name}
+                                </li>
+                              ))
+                            ) : (
+                              <li className="cursor-not-allowed p-1 text-gray-500">No internal users available</li>
+                            )}
+                            <li
+                              onClick={() => {
+                                setIsDropdownOpen(false);
+                              }}
+                              className="cursor-pointer p-1 text-blue-500 hover:bg-blue-100"
+                            >
+                              Add New Chairperson
+                            </li>
+                          </ul>
+                        </div>
+                      )}
+                    </div>
                   </FormControl>
                   <FormMessage
                     className={`${
-                      form.formState.errors.fullName ? "text-red-500" : ""
+                      form.formState.errors.chairperson ? "text-red-500" : ""
                     }`}
                   />
                 </FormItem>
               )}
             />
 
+            {/* Host field */}
             <FormField
               control={form.control}
-              name="email"
+              name="host"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel
                     className={`${
-                      form.formState.errors.email ? "text-red-500" : ""
+                      form.formState.errors.host ? "text-red-500" : ""
                     }`}
                   >
-                    Email{" "}
+                    Host{" "}
                     <span className="text-red-500 dark:text-red-600">*</span>
                   </FormLabel>
                   <FormControl>
                     <Input
                       disabled={loading}
                       className={`active:ring-blue-400 focus-visible:ring-blue-400 ${
-                        form.formState.errors.email
+                        form.formState.errors.host
                           ? "active:ring-red-500 focus-visible:ring-red-500"
                           : ""
                       }`}
-                      placeholder="john.Doe@gmail.com"
+                      placeholder="host@example.com"
                       {...field}
                     />
                   </FormControl>
                   <FormMessage
                     className={`${
-                      form.formState.errors.email ? "text-red-500" : ""
+                      form.formState.errors.host ? "text-red-500" : ""
                     }`}
                   />
                 </FormItem>
               )}
             />
 
+            {/* Participants field */}
             <div className="space-y-2">
               <Button
                 type="button"
                 variant="ghost"
-                className="h-auto hover:bg-blue-50 dark:hover:bg-blue-800/10 text-blue-500 dark:text-blue-400 hover:text-blue-600 "
-                onClick={() => setIsGuestsOpen(!isGuestsOpen)}
+                className="h-auto hover:bg-blue-50 dark:hover:bg-blue-800/10 text-blue-500 dark:text-blue-400 hover:text-blue-600"
+                onClick={() => setIsParticipantsOpen(!isParticipantsOpen)}
                 disabled={loading}
               >
-                {isGuestsOpen ? "Hide Guests" : "+ Add Guests"}
+                {isParticipantsOpen ? "Hide Participants" : "+ Add Participants"}
               </Button>
 
-              {isGuestsOpen && (
+              {isParticipantsOpen && (
                 <div className="space-y-2">
-                  <Input
-                    placeholder="janedoe@hotmail.com, bob@gmail.com, etc."
-                    value={guestInput}
-                    className="active:ring-blue-400 focus-visible:ring-blue-400"
-                    onChange={(e) => setGuestInput(e.target.value)}
-                    onKeyDown={handleGuestKeyDown}
-                    onBlur={addGuest}
-                    disabled={loading}
-                  />
+                  <div className="relative">
+                    <Input
+                      placeholder="janedoe@hotmail.com, bob@gmail.com, etc."
+                      value={participantInput}
+                      className="active:ring-blue-400 focus-visible:ring-blue-400"
+                      onChange={(e) => setParticipantInput(e.target.value)}
+                      onKeyDown={handleParticipantKeyDown}
+                      onBlur={addParticipant}
+                      disabled={loading}
+                    />
+                    <Button
+                      type="button"
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2"
+                      onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                      disabled={loading}
+                    >
+                      <ChevronDown />
+                    </Button>
+                    {isDropdownOpen && (
+                      <div className="absolute z-10 bg-white shadow-md border p-2 w-full mt-1">
+                        <ul>
+                          {userDocs?.map((user) => (
+                            <li
+                              key={user.id}
+                              onClick={() => {
+                                form.setValue("participants", [
+                                  ...form.getValues("participants"),
+                                  user.email,
+                                ]);
+                              }}
+                              className="cursor-pointer p-1 hover:bg-blue-100"
+                            >
+                              {user.name}
+                            </li>
+                          ))}
+                          <li
+                            onClick={() => {
+                              setIsDropdownOpen(false);
+                              addParticipant();
+                            }}
+                            className="cursor-pointer p-1 text-blue-500 hover:bg-blue-100"
+                          >
+                            Add New Participant
+                          </li>
+                        </ul>
+                      </div>
+                    )}
+                  </div>
                   <div className="flex flex-wrap gap-2">
-                    {form.watch("guests").map((guest) => (
+                    {form.watch("participants").map((participant) => (
                       <div
-                        key={guest}
+                        key={participant}
                         className="flex items-center gap-1 px-2 py-1 bg-blue-500 dark:bg-blue-400 text-white dark:text-background rounded-full text-sm"
                       >
-                        <span>{guest}</span>
+                        <span>{participant}</span>
                         <button
                           type="button"
-                          onClick={() => removeGuest(guest)}
+                          onClick={() => removeParticipant(participant)}
                           className="hover:text-blue-200"
                         >
                           <X className="h-3 w-3 dark:text-background" />
