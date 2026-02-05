@@ -55,29 +55,58 @@ const MeetingForm = ({
 }: MeetingFormProps) => {
   const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
   const [participantInput, setParticipantInput] = useState("");
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false); // For dropdown
-  const [chairpersonId, setChairpersonId] = useState<string | null>(null); // Local state for chairperson_id
-  const [existingChairpersons, setExistingChairpersons] = useState<string[]>([]); // To hold selected chairpersons
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [chairpersonId, setChairpersonId] = useState<string | null>(null);
   const { call: bookMeeting, loading } = useFrappePostCall(
     `frappe_appointment.api.personal_meet.book_time_slot`
   );
   const [searchParams] = useSearchParams();
 
   const { selectedDate, selectedSlot, timeZone } = useAppContext();
-  const userDocs: any[] = []; // Replace with actual user data source
 
-  // Initialize form with react-hook-form
+  // Replace with your actual user data source
+  // For demo, empty array to replicate your problem scenario
+  const userDocs: { id: string; name: string; email: string }[] = [];
+
+  // State to hold existing chairpersons including selected one(s)
+  const [existingChairpersons, setExistingChairpersons] = useState<
+    { id: string; name: string }[]
+  >([]);
+
   const form = useForm<MeetingFormValues>({
     resolver: zodResolver(meetingFormSchema),
     defaultValues: {
       chairperson: "",
-      chairperson_id: "", // Default value for chairperson_id
+      chairperson_id: "",
       host: "",
       participants: [],
     },
   });
 
-  // Handle participant input field keydown event
+  // Populate existingChairpersons on mount with selected chairperson
+  useEffect(() => {
+    const currentName = form.getValues("chairperson");
+    const currentId = form.getValues("chairperson_id");
+    if (currentName && currentId) {
+      setExistingChairpersons((prev) => {
+        if (!prev.find((p) => p.id === currentId)) {
+          return [...prev, { id: currentId, name: currentName }];
+        }
+        return prev;
+      });
+      setChairpersonId(currentId);
+    }
+  }, []);
+
+  // Merge existing chairpersons with userDocs to avoid duplicates in dropdown
+  const mergedChairpersons = [
+    ...existingChairpersons,
+    ...userDocs.filter(
+      (user) => !existingChairpersons.some((ec) => ec.id === user.id)
+    ),
+  ];
+
+  // Handle adding participants on input keydown or blur
   const handleParticipantKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
@@ -85,19 +114,17 @@ const MeetingForm = ({
     }
   };
 
-  // Add a participant to the form
   const addParticipant = () => {
     const email = participantInput.trim();
     if (email && email.includes("@")) {
       const currentParticipants = form.getValues("participants");
       if (!currentParticipants.includes(email)) {
         form.setValue("participants", [...currentParticipants, email]);
-        setParticipantInput(""); // Clear input after adding
+        setParticipantInput("");
       }
     }
   };
 
-  // Remove a participant from the form
   const removeParticipant = (email: string) => {
     const currentParticipants = form.getValues("participants");
     form.setValue(
@@ -106,12 +133,11 @@ const MeetingForm = ({
     );
   };
 
-  // Handle form submission
+  // Submit handler
   const onSubmit = (data: MeetingFormValues) => {
     const extraArgs: Record<string, string> = {};
     searchParams.forEach((value, key) => (extraArgs[key] = value));
-    
-    // Prepare meeting data with necessary fields
+
     const meetingData = {
       ...extraArgs,
       duration_id: durationId,
@@ -123,11 +149,11 @@ const MeetingForm = ({
       user_timezone_offset: String(getTimeZoneOffsetFromTimeZoneString(timeZone)),
       start_time: selectedSlot.start_time,
       end_time: selectedSlot.end_time,
-      chairperson_name: data.chairperson, // Add chairperson name
-      chairperson_id: chairpersonId, // Include chairperson_id from local state
-      host_email: data.host, // Add host email
-      user_name: data.chairperson, // Include user_name (chairperson name) for the API
-      user_email: data.host, // Include user_email (host email) for the API
+      chairperson_name: data.chairperson,
+      chairperson_id: chairpersonId,
+      host_email: data.host,
+      user_name: data.chairperson,
+      user_email: data.host,
       participants: data.participants.join(", "),
     };
 
@@ -152,20 +178,20 @@ const MeetingForm = ({
       });
   };
 
-  // Handle selecting a chairperson from the dropdown
-  const handleSelectChairperson = (user: any) => {
-    form.setValue("chairperson", user.name);  // Set name as chairperson
-    form.setValue("chairperson_id", user.id); // Set chairperson_id in the form
-    setChairpersonId(user.id); // Store chairperson_id in the local state
-    setExistingChairpersons(prev => [...prev, user.name]); // Store selected chairperson
-    setIsDropdownOpen(false); // Close the dropdown
-  };
+  // Handle chairperson selection from dropdown
+  const handleSelectChairperson = (user: { id: string; name: string }) => {
+    form.setValue("chairperson", user.name);
+    form.setValue("chairperson_id", user.id);
+    setChairpersonId(user.id);
 
-  // Pre-populate existing chairperson if selected
-  const handleExistingChairperson = (userName: string) => {
-    if (!existingChairpersons.includes(userName)) {
-      setExistingChairpersons([...existingChairpersons, userName]);
-    }
+    setExistingChairpersons((prev) => {
+      if (!prev.find((p) => p.id === user.id)) {
+        return [...prev, user];
+      }
+      return prev;
+    });
+
+    setIsDropdownOpen(false);
   };
 
   return (
@@ -214,6 +240,7 @@ const MeetingForm = ({
                         className="active:ring-blue-400 focus-visible:ring-blue-400"
                         placeholder="Select or Add Chairperson"
                         {...field}
+                        onClick={() => setIsDropdownOpen(true)}
                       />
                       <Button
                         type="button"
@@ -224,20 +251,22 @@ const MeetingForm = ({
                         <ChevronDown />
                       </Button>
                       {isDropdownOpen && (
-                        <div className="absolute z-10 bg-white shadow-md border p-2 w-full mt-1">
+                        <div className="absolute z-10 bg-white shadow-md border p-2 w-full mt-1 max-h-40 overflow-auto">
                           <ul>
-                            {Array.isArray(userDocs) && userDocs.length > 0 ? (
-                              userDocs.map((user) => (
+                            {mergedChairpersons.length > 0 ? (
+                              mergedChairpersons.map((user) => (
                                 <li
-                                  key={user.id} // Store the unique user ID
+                                  key={user.id}
                                   onClick={() => handleSelectChairperson(user)}
                                   className="cursor-pointer p-1 hover:bg-blue-100"
                                 >
-                                  {user.name} {/* Display the name */}
+                                  {user.name}
                                 </li>
                               ))
                             ) : (
-                              <li className="cursor-not-allowed p-1 text-gray-500">No internal users available</li>
+                              <li className="cursor-not-allowed p-1 text-gray-500">
+                                No internal users available
+                              </li>
                             )}
                             <li
                               onClick={() => {
@@ -329,20 +358,23 @@ const MeetingForm = ({
                       <ChevronDown />
                     </Button>
                     {isDropdownOpen && (
-                      <div className="absolute z-10 bg-white shadow-md border p-2 w-full mt-1">
+                      <div className="absolute z-10 bg-white shadow-md border p-2 w-full mt-1 max-h-40 overflow-auto">
                         <ul>
                           {userDocs?.map((user) => (
                             <li
-                              key={user.id} // Correct unique identifier for participants
+                              key={user.id}
                               onClick={() => {
-                                form.setValue("participants", [
-                                  ...form.getValues("participants"),
-                                  user.email, // Store the email of the participant
-                                ]);
+                                const current = form.getValues("participants");
+                                if (!current.includes(user.email)) {
+                                  form.setValue("participants", [
+                                    ...current,
+                                    user.email,
+                                  ]);
+                                }
                               }}
                               className="cursor-pointer p-1 hover:bg-blue-100"
                             >
-                              {user.name} {/* Display participant name */}
+                              {user.name}
                             </li>
                           ))}
                           <li
