@@ -30,8 +30,10 @@ import {
 } from "@/lib/utils";
 import Spinner from "@/components/spinner";
 
+// Form schema using zod
 const meetingFormSchema = z.object({
   chairperson: z.string().min(2, "Chairperson name must be at least 2 characters"),
+  chairperson_id: z.string().optional(), // Optional chairperson_id
   host: z.string().email("Please enter a valid host email address"),
   participants: z.array(z.string().email("Please enter a valid email address")),
 });
@@ -53,24 +55,28 @@ const MeetingForm = ({
 }: MeetingFormProps) => {
   const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
   const [participantInput, setParticipantInput] = useState("");
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);  // For dropdown
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false); // For dropdown
+  const [chairpersonId, setChairpersonId] = useState<string | null>(null); // Local state for chairperson_id
   const { call: bookMeeting, loading } = useFrappePostCall(
     `frappe_appointment.api.personal_meet.book_time_slot`
   );
   const [searchParams] = useSearchParams();
 
   const { selectedDate, selectedSlot, timeZone } = useAppContext();
-  const userDocs: any[] = []; // TODO: Replace with actual user data source
+  const userDocs: any[] = []; // Replace with actual user data source
 
+  // Initialize form with react-hook-form
   const form = useForm<MeetingFormValues>({
     resolver: zodResolver(meetingFormSchema),
     defaultValues: {
       chairperson: "",
+      chairperson_id: "", // Default value for chairperson_id
       host: "",
       participants: [],
     },
   });
 
+  // Handle participant input field keydown event
   const handleParticipantKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
@@ -78,17 +84,19 @@ const MeetingForm = ({
     }
   };
 
+  // Add a participant to the form
   const addParticipant = () => {
     const email = participantInput.trim();
     if (email && email.includes("@")) {
       const currentParticipants = form.getValues("participants");
       if (!currentParticipants.includes(email)) {
         form.setValue("participants", [...currentParticipants, email]);
-        setParticipantInput("");  // Clear input after adding
+        setParticipantInput(""); // Clear input after adding
       }
     }
   };
 
+  // Remove a participant from the form
   const removeParticipant = (email: string) => {
     const currentParticipants = form.getValues("participants");
     form.setValue(
@@ -97,6 +105,7 @@ const MeetingForm = ({
     );
   };
 
+  // Handle form submission
   const onSubmit = (data: MeetingFormValues) => {
     const extraArgs: Record<string, string> = {};
     searchParams.forEach((value, key) => (extraArgs[key] = value));
@@ -108,12 +117,11 @@ const MeetingForm = ({
         month: "numeric",
         day: "numeric",
       }).format(selectedDate),
-      user_timezone_offset: String(
-        getTimeZoneOffsetFromTimeZoneString(timeZone)
-      ),
+      user_timezone_offset: String(getTimeZoneOffsetFromTimeZoneString(timeZone)),
       start_time: selectedSlot.start_time,
       end_time: selectedSlot.end_time,
       chairperson_name: data.chairperson,
+      chairperson_id: chairpersonId, // Include chairperson_id from local state
       host_email: data.host,
       participants: data.participants.join(", "),
     };
@@ -137,6 +145,14 @@ const MeetingForm = ({
           },
         });
       });
+  };
+
+  // Handle selecting a chairperson from the dropdown
+  const handleSelectChairperson = (user: any) => {
+    form.setValue("chairperson", user.name);  // Set name as chairperson
+    form.setValue("chairperson_id", user.id); // Set chairperson_id in the form
+    setChairpersonId(user.id); // Store chairperson_id in the local state
+    setIsDropdownOpen(false); // Close the dropdown
   };
 
   return (
@@ -200,14 +216,11 @@ const MeetingForm = ({
                             {Array.isArray(userDocs) && userDocs.length > 0 ? (
                               userDocs.map((user) => (
                                 <li
-                                  key={user.id}
-                                  onClick={() => {
-                                    form.setValue("chairperson", user.name);
-                                    setIsDropdownOpen(false);
-                                  }}
+                                  key={user.id} // Store the unique user ID
+                                  onClick={() => handleSelectChairperson(user)}
                                   className="cursor-pointer p-1 hover:bg-blue-100"
                                 >
-                                  {user.name}
+                                  {user.name} {/* Display the name */}
                                 </li>
                               ))
                             ) : (
@@ -307,16 +320,16 @@ const MeetingForm = ({
                         <ul>
                           {userDocs?.map((user) => (
                             <li
-                              key={user.id}
+                              key={user.id} // Correct unique identifier for participants
                               onClick={() => {
                                 form.setValue("participants", [
                                   ...form.getValues("participants"),
-                                  user.email,
+                                  user.email, // Store the email of the participant
                                 ]);
                               }}
                               className="cursor-pointer p-1 hover:bg-blue-100"
                             >
-                              {user.name}
+                              {user.name} {/* Display participant name */}
                             </li>
                           ))}
                           <li
