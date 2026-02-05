@@ -194,6 +194,12 @@ const MeetingForm = ({
     setIsDropdownOpen(false);
   };
 
+  // Handle adding a new chairperson
+  const handleAddNewChairperson = () => {
+    setIsDropdownOpen(false);
+    toast("Add new chairperson feature is under development.");
+  };
+
   return (
     <motion.div
       key={2}
@@ -269,9 +275,7 @@ const MeetingForm = ({
                               </li>
                             )}
                             <li
-                              onClick={() => {
-                                setIsDropdownOpen(false);
-                              }}
+                              onClick={handleAddNewChairperson}
                               className="cursor-pointer p-1 text-blue-500 hover:bg-blue-100"
                             >
                               Add New Chairperson
