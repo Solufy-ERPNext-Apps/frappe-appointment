@@ -50,14 +50,11 @@ const MeetingForm = ({
   onSuccess,
   isMobileView,
 }: MeetingFormProps) => {
-
   const [isParticipantsDropdownOpen, setIsParticipantsDropdownOpen] = useState(false);
   const [participantInput, setParticipantInput] = useState("");
   const [isHostDropdownOpen, setIsHostDropdownOpen] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isChairpersonDropdownOpen, setIsChairpersonDropdownOpen] = useState(false);
-  const [existingChairpersons, setExistingChairpersons] = useState<
-    { id: string; name: string }[]
-  >([]);
   const [chairpersonId, setChairpersonId] = useState<string | null>(null);
   const { call: bookMeeting, loading } = useFrappePostCall(
     `frappe_appointment.api.personal_meet.book_time_slot`
@@ -72,30 +69,15 @@ const MeetingForm = ({
     limit: 100,
   });
   const userDocs =
-  users?.map((user) => {
-    const displayName =
-      user.full_name ||
-      [user.first_name, user.last_name].filter(Boolean).join(" ") ||
-      user.name;
+  users?.map((user) => ({
+    id: user.name, 
+    name: user.chairperson || user.name,
+    email: user.host,
+  })) ||  [];
 
-    return {
-      id: user.name,
-      name: displayName,
-      email: user.email,
-    };
-  }) || [];
-  console.log("USERS", users);
-console.log("USERDOCS", userDocs);
-  // const userDocs =
-  // users?.map((user) => ({
-  //   id: user.name, 
-  //   name: user.chairperson || user.name,
-  //   email: user.host,
-  // })) ||  [];
-
-  // const [existingChairpersons, setExistingChairpersons] = useState<
-  //   { id: string; name: string }[]
-  // >([]);
+  const [existingChairpersons, setExistingChairpersons] = useState<
+    { id: string; name: string }[]
+  >([]);
 
   const form = useForm<MeetingFormValues>({
     resolver: zodResolver(meetingFormSchema),
@@ -215,12 +197,12 @@ console.log("USERDOCS", userDocs);
       return prev;
     });
 
-    setIsChairpersonDropdownOpen(false);
+    setIsDropdownOpen(false);
   };
 
   // Handle adding a new chairperson
   const handleAddNewChairperson = () => {
-    setIsChairpersonDropdownOpen(false);
+    setIsDropdownOpen(false);
     toast("Add new chairperson feature is under development.");
   };
 
@@ -306,7 +288,7 @@ console.log("USERDOCS", userDocs);
                               onClick={handleAddNewChairperson}
                               className="cursor-pointer p-1 text-blue-500 hover:bg-blue-100"
                             >
-                            Add New Chairperson
+                              Add New Chairperson
                             </li>
                           </ul>
                         </div>
@@ -430,7 +412,7 @@ console.log("USERDOCS", userDocs);
                           ))}
                           <li
                             onClick={() => {
-                              setIsParticipantsDropdownOpen(false);
+                              setIsDropdownOpen(false);
                               addParticipant();
                             }}
                             className="cursor-pointer p-1 text-blue-500 hover:bg-blue-100"
