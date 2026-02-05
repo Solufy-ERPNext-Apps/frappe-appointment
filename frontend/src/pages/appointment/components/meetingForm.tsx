@@ -50,9 +50,11 @@ const MeetingForm = ({
   onSuccess,
   isMobileView,
 }: MeetingFormProps) => {
-  const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
+  const [isParticipantsDropdownOpen, setIsParticipantsDropdownOpen] = useState(false);
   const [participantInput, setParticipantInput] = useState("");
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isHostDropdownOpen, setIsHostDropdownOpen] = useState(false);
+  // const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isChairpersonDropdownOpen, setIsChairpersonDropdownOpen] = useState(false);
   const [chairpersonId, setChairpersonId] = useState<string | null>(null);
   const { call: bookMeeting, loading } = useFrappePostCall(
     `frappe_appointment.api.personal_meet.book_time_slot`
@@ -136,7 +138,7 @@ const MeetingForm = ({
       currentParticipants.filter((participant) => participant !== email)
     );
   };
-const [isHostDropdownOpen, setIsHostDropdownOpen] = useState(false);
+
   // Submit handler
   const onSubmit = (data: MeetingFormValues) => {
     const extraArgs: Record<string, string> = {};
@@ -195,12 +197,12 @@ const [isHostDropdownOpen, setIsHostDropdownOpen] = useState(false);
       return prev;
     });
 
-    setIsDropdownOpen(false);
+    setIsChairpersonDropdownOpen(false);
   };
 
   // Handle adding a new chairperson
   const handleAddNewChairperson = () => {
-    setIsDropdownOpen(false);
+    setIsChairpersonDropdownOpen(false);
     toast("Add new chairperson feature is under development.");
   };
 
@@ -250,17 +252,21 @@ const [isHostDropdownOpen, setIsHostDropdownOpen] = useState(false);
                         className="active:ring-blue-400 focus-visible:ring-blue-400"
                         placeholder="Select or Add Chairperson"
                         {...field}
-                        onClick={() => setIsDropdownOpen(true)}
+                        // onClick={() => setIsDropdownOpen(true)}
+                        onClick={() => setIsChairpersonDropdownOpen(true)}
                       />
                       <Button
                         type="button"
                         className="absolute right-2 top-1/2 transform -translate-y-1/2"
-                        onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                        // onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                        onClick={() =>
+                            setIsChairpersonDropdownOpen((v) => !v)
+                          }
                         disabled={loading}
                       >
                         <ChevronDown />
                       </Button>
-                      {isDropdownOpen && (
+                      {isChairpersonDropdownOpen && (
                         <div className="absolute z-10 bg-white shadow-md border p-2 w-full mt-1 max-h-40 overflow-auto">
                           <ul>
                             {mergedChairpersons.length > 0 ? (
@@ -332,58 +338,57 @@ const [isHostDropdownOpen, setIsHostDropdownOpen] = useState(false);
                 </FormItem>
               )}
             /> */}
+             {/* Host field */}
             <FormField
-        control={form.control}
-        name="host"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>
-              Host <span className="text-red-500"></span>
-            </FormLabel>
+                  control={form.control}
+                  name="host"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        Host <span className="text-red-500"></span>
+                      </FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Input
+                            readOnly
+                            placeholder="Select Host Email"
+                            value={field.value || ""}
+                            onClick={() => setIsHostDropdownOpen(true)}
+                          />
 
-            <FormControl>
-              <div className="relative">
-                <Input
-                  readOnly
-                  placeholder="Select Host Email"
-                  value={field.value || ""}
-                  onClick={() => setIsHostDropdownOpen(true)}
+                          <Button
+                            type="button"
+                            className="absolute right-2 top-1/2 -translate-y-1/2"
+                            onClick={() => setIsHostDropdownOpen((v) => !v)}
+                          >
+                            <ChevronDown />
+                          </Button>
+
+                          {isHostDropdownOpen && (
+                            <div className="absolute z-10 bg-white border shadow-md mt-1 w-full max-h-40 overflow-auto">
+                              <ul>
+                                {userDocs.map((user) => (
+                                  <li
+                                    key={user.id}
+                                    onClick={() => {
+                                      field.onChange(user.email); 
+                                      setIsHostDropdownOpen(false);
+                                    }}
+                                    className="cursor-pointer p-2 hover:bg-blue-100"
+                                  >
+                                    <div className="font-medium">{user.name}</div>
+                                    <div className="text-xs text-gray-500">{user.email}</div>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-
-                <Button
-                  type="button"
-                  className="absolute right-2 top-1/2 -translate-y-1/2"
-                  onClick={() => setIsHostDropdownOpen((v) => !v)}
-                >
-                  <ChevronDown />
-                </Button>
-
-                {isHostDropdownOpen && (
-                  <div className="absolute z-10 bg-white border shadow-md mt-1 w-full max-h-40 overflow-auto">
-                    <ul>
-                      {userDocs.map((user) => (
-                        <li
-                          key={user.id}
-                          onClick={() => {
-                            field.onChange(user.email); // 👈 EMAIL stored
-                            setIsHostDropdownOpen(false);
-                          }}
-                          className="cursor-pointer p-2 hover:bg-blue-100"
-                        >
-                          <div className="font-medium">{user.name}</div>
-                          <div className="text-xs text-gray-500">{user.email}</div>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            </FormControl>
-
-            <FormMessage />
-          </FormItem>
-        )}
-      />
 
             {/* Participants field */}
             <div className="space-y-2">
@@ -391,13 +396,13 @@ const [isHostDropdownOpen, setIsHostDropdownOpen] = useState(false);
                 type="button"
                 variant="ghost"
                 className="h-auto hover:bg-blue-50 dark:hover:bg-blue-800/10 text-blue-500 dark:text-blue-400 hover:text-blue-600"
-                onClick={() => setIsParticipantsOpen(!isParticipantsOpen)}
+                onClick={() => setIsParticipantsDropdownOpen(!isParticipantsDropdownOpen)}
                 disabled={loading}
               >
-                {isParticipantsOpen ? "Hide Participants" : "+ Add Participants"}
+                {isParticipantsDropdownOpen ? "Hide Participants" : "+ Add Participants"}
               </Button>
 
-              {isParticipantsOpen && (
+              {isParticipantsDropdownOpen && (
                 <div className="space-y-2">
                   <div className="relative">
                     <Input
@@ -412,12 +417,15 @@ const [isHostDropdownOpen, setIsHostDropdownOpen] = useState(false);
                     <Button
                       type="button"
                       className="absolute right-2 top-1/2 transform -translate-y-1/2"
-                      onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                      // onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                      onClick={() =>
+                        setIsParticipantsDropdownOpen((v) => !v)
+                      }
                       disabled={loading}
                     >
                       <ChevronDown />
                     </Button>
-                    {isDropdownOpen && (
+                    {isParticipantsDropdownOpen && (
                       <div className="absolute z-10 bg-white shadow-md border p-2 w-full mt-1 max-h-40 overflow-auto">
                         <ul>
                           {userDocs?.map((user) => (
@@ -439,7 +447,7 @@ const [isHostDropdownOpen, setIsHostDropdownOpen] = useState(false);
                           ))}
                           <li
                             onClick={() => {
-                              setIsDropdownOpen(false);
+                              setIsChairpersonDropdownOpen(false);
                               addParticipant();
                             }}
                             className="cursor-pointer p-1 text-blue-500 hover:bg-blue-100"
