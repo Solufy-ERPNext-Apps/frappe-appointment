@@ -109,6 +109,8 @@ const MeetingForm = ({
   const onSubmit = (data: MeetingFormValues) => {
     const extraArgs: Record<string, string> = {};
     searchParams.forEach((value, key) => (extraArgs[key] = value));
+    
+    // Prepare meeting data with necessary fields
     const meetingData = {
       ...extraArgs,
       duration_id: durationId,
@@ -120,9 +122,11 @@ const MeetingForm = ({
       user_timezone_offset: String(getTimeZoneOffsetFromTimeZoneString(timeZone)),
       start_time: selectedSlot.start_time,
       end_time: selectedSlot.end_time,
-      chairperson_name: data.chairperson,
-      chairperson_id: chairpersonId, // Include chairperson_id from local state
-      host_email: data.host,
+      chairperson_name: data.chairperson, // Set chairperson_name
+      chairperson_id: chairpersonId, // Use chairperson_id from local state
+      host_email: data.host, // Set host email
+      user_name: data.chairperson, // Include user_name (chairperson name) for the API
+      user_email: data.host, // Include user_email (host email) for the API
       participants: data.participants.join(", "),
     };
 
