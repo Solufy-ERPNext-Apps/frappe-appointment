@@ -9,10 +9,6 @@ import { CalendarPlus, ChevronLeft, CircleAlert, X, ChevronDown } from "lucide-r
 import { formatDate } from "date-fns";
 import { toast } from "sonner";
 import { useSearchParams } from "react-router-dom";
-
-/**
- * Internal dependencies.
- */
 import { Button } from "@/components/button";
 import {
   Form,
@@ -66,22 +62,17 @@ const MeetingForm = ({
   const { selectedDate, selectedSlot, timeZone } = useAppContext();
   const { data: users, isLoading: usersLoading } =
   useFrappeGetDocList("User", {
-    fields: ["name", "full_name", "email"],
+    fields: ["name", "chairperson", "host"],
     filters: [["enabled", "=", 1]],
     limit: 100,
   });
   const userDocs =
   users?.map((user) => ({
-    id: user.name, // ERPNext User ID
-    name: user.full_name || user.name,
-    email: user.email,
+    id: user.name, 
+    name: user.chairperson || user.name,
+    email: user.host,
   })) ||  [];
 
-  // Replace with your actual user data source
-  // For demo, empty array to replicate your problem scenario
-  // const userDocs: { id: string; name: string; email: string }[] = [];
-
-  // State to hold existing chairpersons including selected one(s)
   const [existingChairpersons, setExistingChairpersons] = useState<
     { id: string; name: string }[]
   >([]);
@@ -145,7 +136,7 @@ const MeetingForm = ({
       currentParticipants.filter((participant) => participant !== email)
     );
   };
-
+const [isHostDropdownOpen, setIsHostDropdownOpen] = useState(false);
   // Submit handler
   const onSubmit = (data: MeetingFormValues) => {
     const extraArgs: Record<string, string> = {};
@@ -308,7 +299,7 @@ const MeetingForm = ({
             />
 
             {/* Host field */}
-            <FormField
+            {/* <FormField
               control={form.control}
               name="host"
               render={({ field }) => (
@@ -340,7 +331,59 @@ const MeetingForm = ({
                   />
                 </FormItem>
               )}
-            />
+            /> */}
+            <FormField
+        control={form.control}
+        name="host"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>
+              Host <span className="text-red-500"></span>
+            </FormLabel>
+
+            <FormControl>
+              <div className="relative">
+                <Input
+                  readOnly
+                  placeholder="Select Host Email"
+                  value={field.value || ""}
+                  onClick={() => setIsHostDropdownOpen(true)}
+                />
+
+                <Button
+                  type="button"
+                  className="absolute right-2 top-1/2 -translate-y-1/2"
+                  onClick={() => setIsHostDropdownOpen((v) => !v)}
+                >
+                  <ChevronDown />
+                </Button>
+
+                {isHostDropdownOpen && (
+                  <div className="absolute z-10 bg-white border shadow-md mt-1 w-full max-h-40 overflow-auto">
+                    <ul>
+                      {userDocs.map((user) => (
+                        <li
+                          key={user.id}
+                          onClick={() => {
+                            field.onChange(user.email); // 👈 EMAIL stored
+                            setIsHostDropdownOpen(false);
+                          }}
+                          className="cursor-pointer p-2 hover:bg-blue-100"
+                        >
+                          <div className="font-medium">{user.name}</div>
+                          <div className="text-xs text-gray-500">{user.email}</div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </FormControl>
+
+            <FormMessage />
+          </FormItem>
+        )}
+      />
 
             {/* Participants field */}
             <div className="space-y-2">
