@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { motion } from "framer-motion";
 import z from "zod";
@@ -57,6 +57,7 @@ const MeetingForm = ({
   const [participantInput, setParticipantInput] = useState("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false); // For dropdown
   const [chairpersonId, setChairpersonId] = useState<string | null>(null); // Local state for chairperson_id
+  const [existingChairpersons, setExistingChairpersons] = useState<string[]>([]); // To hold selected chairpersons
   const { call: bookMeeting, loading } = useFrappePostCall(
     `frappe_appointment.api.personal_meet.book_time_slot`
   );
@@ -122,9 +123,9 @@ const MeetingForm = ({
       user_timezone_offset: String(getTimeZoneOffsetFromTimeZoneString(timeZone)),
       start_time: selectedSlot.start_time,
       end_time: selectedSlot.end_time,
-      chairperson_name: data.chairperson, // Set chairperson_name
-      chairperson_id: chairpersonId, // Use chairperson_id from local state
-      host_email: data.host, // Set host email
+      chairperson_name: data.chairperson, // Add chairperson name
+      chairperson_id: chairpersonId, // Include chairperson_id from local state
+      host_email: data.host, // Add host email
       user_name: data.chairperson, // Include user_name (chairperson name) for the API
       user_email: data.host, // Include user_email (host email) for the API
       participants: data.participants.join(", "),
@@ -156,7 +157,15 @@ const MeetingForm = ({
     form.setValue("chairperson", user.name);  // Set name as chairperson
     form.setValue("chairperson_id", user.id); // Set chairperson_id in the form
     setChairpersonId(user.id); // Store chairperson_id in the local state
+    setExistingChairpersons(prev => [...prev, user.name]); // Store selected chairperson
     setIsDropdownOpen(false); // Close the dropdown
+  };
+
+  // Pre-populate existing chairperson if selected
+  const handleExistingChairperson = (userName: string) => {
+    if (!existingChairpersons.includes(userName)) {
+      setExistingChairpersons([...existingChairpersons, userName]);
+    }
   };
 
   return (
