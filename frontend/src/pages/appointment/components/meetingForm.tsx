@@ -265,7 +265,7 @@ const MeetingForm = ({
                                   onClick={() => handleSelectChairperson(user)}
                                   className="cursor-pointer p-1 hover:bg-blue-100"
                                 >
-                                  {user.name}
+                                  {user.name} {/* Displaying user name for chairperson */}
                                 </li>
                               ))
                             ) : (
@@ -377,7 +377,7 @@ const MeetingForm = ({
                               }}
                               className="cursor-pointer p-1 hover:bg-blue-100"
                             >
-                              {user.name}
+                              {user.email} {/* Displaying user email for participants */}
                             </li>
                           ))}
                           <li
