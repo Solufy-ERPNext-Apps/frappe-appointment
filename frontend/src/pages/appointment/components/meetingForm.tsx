@@ -1,80 +1,76 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { motion } from "framer-motion";
-import { z } from "zod";
-import { ChevronDown, X } from "lucide-react";
-import { useFrappeGetDocList } from "frappe-react-sdk";
+import z from "zod";
+import { useFrappePostCall } from "frappe-react-sdk";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { CalendarPlus, ChevronLeft, CircleAlert, X, ChevronDown } from "lucide-react";
+import { formatDate } from "date-fns";
+import { toast } from "sonner";
+import { useSearchParams } from "react-router-dom";
 
+/**
+ * Internal dependencies.
+ */
+import { Button } from "@/components/button";
 import {
   Form,
+  FormControl,
   FormField,
   FormItem,
   FormLabel,
-  FormControl,
   FormMessage,
 } from "@/components/form";
 import { Input } from "@/components/input";
-import { Button } from "@/components/button";
+import Typography from "@/components/typography";
+import { useAppContext } from "@/context/app";
+import {
+  getTimeZoneOffsetFromTimeZoneString,
+  parseFrappeErrorMsg,
+} from "@/lib/utils";
 import Spinner from "@/components/spinner";
 
-/* ---------------- SCHEMA ---------------- */
-
+// Form schema using zod
 const meetingFormSchema = z.object({
-  chairperson: z.string().min(1, "Chairperson is required"),
-  chairperson_id: z.string().min(1, "Please select a chairperson"),
-  host: z.string().email("Invalid host email"),
-  participants: z.array(z.string().email()),
+  chairperson: z.string().min(2, "Chairperson name must be at least 2 characters"),
+  chairperson_id: z.string().optional(), // Optional chairperson_id
+  host: z.string().email("Please enter a valid host email address"),
+  participants: z.array(z.string().email("Please enter a valid email address")),
 });
 
 type MeetingFormValues = z.infer<typeof meetingFormSchema>;
 
-/* ---------------- CLICK OUTSIDE HOOK ---------------- */
-
-function useClickOutside(
-  ref: React.RefObject<HTMLElement>,
-  handler: () => void
-) {
-  useEffect(() => {
-    const listener = (e: MouseEvent) => {
-      if (!ref.current || ref.current.contains(e.target as Node)) return;
-      handler();
-    };
-    document.addEventListener("mousedown", listener);
-    return () => document.removeEventListener("mousedown", listener);
-  }, [handler]);
+interface MeetingFormProps {
+  onBack: VoidFunction;
+  onSuccess: (data: any) => void;
+  durationId: string;
+  isMobileView: boolean;
 }
 
-/* ---------------- COMPONENT ---------------- */
-
-  const MeetingForm = () => {
-  const chairpersonRef = useRef<HTMLDivElement>(null);
-  const participantRef = useRef<HTMLDivElement>(null);
-  const [chairpersonOpen, setChairpersonOpen] = useState(false);
-  const [participantOpen, setParticipantOpen] = useState(false);
+const MeetingForm = ({
+  onBack,
+  durationId,
+  onSuccess,
+  isMobileView,
+}: MeetingFormProps) => {
+  const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
   const [participantInput, setParticipantInput] = useState("");
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [chairpersonId, setChairpersonId] = useState<string | null>(null);
+  const { call: bookMeeting, loading } = useFrappePostCall(
+    `frappe_appointment.api.personal_meet.book_time_slot`
+  );
+  const [searchParams] = useSearchParams();
 
-  useClickOutside(chairpersonRef, () => setChairpersonOpen(false));
-  useClickOutside(participantRef, () => setParticipantOpen(false));
+  const { selectedDate, selectedSlot, timeZone } = useAppContext();
 
-  /* ---------------- USERS ---------------- */
+  // Replace with your actual user data source
+  const userDocs: { id: string; name: string; email: string }[] = []; // Populate with your actual user data
 
- // Correct fields: 'name' is the ID, 'full_name' is the display name
-const { data: users, isLoading } = useFrappeGetDocList("User", {
-  fields: ["name", "full_name", "email"],
-  filters: [["enabled", "=", 1]],
-  limit: 100,
-});
-
-// Map standard Frappe fields to your dropdown structure
-const availableUsers = users?.map((user) => ({
-  id: user.name,         // e.g., "jane@example.com"
-  name: user.full_name || user.name, // Display name
-  email: user.email,
-})) || [];
-
-
-  /* ---------------- FORM ---------------- */
+  // State to hold existing chairpersons including selected one(s)
+  const [existingChairpersons, setExistingChairpersons] = useState<
+    { id: string; name: string }[]
+  >([]);
 
   const form = useForm<MeetingFormValues>({
     resolver: zodResolver(meetingFormSchema),
@@ -86,142 +82,357 @@ const availableUsers = users?.map((user) => ({
     },
   });
 
-  /* ---------------- HANDLERS ---------------- */
+  // Populate existingChairpersons on mount with selected chairperson
+  useEffect(() => {
+    const currentName = form.getValues("chairperson");
+    const currentId = form.getValues("chairperson_id");
+    if (currentName && currentId) {
+      setExistingChairpersons((prev) => {
+        if (!prev.find((p) => p.id === currentId)) {
+          return [...prev, { id: currentId, name: currentName }];
+        }
+        return prev;
+      });
+      setChairpersonId(currentId);
+    }
+  }, []);
 
-  const selectChairperson = (user: {
-    id: string;
-    name: string;
-    email: string;
-  }) => {
+  // Merge existing chairpersons with userDocs to avoid duplicates in dropdown
+  const mergedChairpersons = [
+    ...existingChairpersons,
+    ...userDocs.filter(
+      (user) => !existingChairpersons.some((ec) => ec.id === user.id)
+    ),
+  ];
+
+  // Handle adding participants on input keydown or blur
+  const handleParticipantKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addParticipant();
+    }
+  };
+
+  const addParticipant = () => {
+    const email = participantInput.trim();
+    if (email && email.includes("@")) {
+      const currentParticipants = form.getValues("participants");
+      if (!currentParticipants.includes(email)) {
+        form.setValue("participants", [...currentParticipants, email]);
+        setParticipantInput("");
+      }
+    }
+  };
+
+  const removeParticipant = (email: string) => {
+    const currentParticipants = form.getValues("participants");
+    form.setValue(
+      "participants",
+      currentParticipants.filter((participant) => participant !== email)
+    );
+  };
+
+  // Submit handler
+  const onSubmit = (data: MeetingFormValues) => {
+    const extraArgs: Record<string, string> = {};
+    searchParams.forEach((value, key) => (extraArgs[key] = value));
+
+    const meetingData = {
+      ...extraArgs,
+      duration_id: durationId,
+      date: new Intl.DateTimeFormat("en-CA", {
+        year: "numeric",
+        month: "numeric",
+        day: "numeric",
+      }).format(selectedDate),
+      user_timezone_offset: String(getTimeZoneOffsetFromTimeZoneString(timeZone)),
+      start_time: selectedSlot.start_time,
+      end_time: selectedSlot.end_time,
+      chairperson_name: data.chairperson,
+      chairperson_id: chairpersonId,
+      host_email: data.host,
+      user_name: data.chairperson,
+      user_email: data.host,
+      participants: data.participants.join(", "),
+    };
+
+    bookMeeting(meetingData)
+      .then((data) => {
+        onSuccess(data);
+      })
+      .catch((err) => {
+        const error = parseFrappeErrorMsg(err);
+        toast(error || "Something went wrong", {
+          duration: 4000,
+          classNames: {
+            actionButton:
+              "group-[.toast]:!bg-red-500 group-[.toast]:hover:!bg-red-300 group-[.toast]:!text-white",
+          },
+          icon: <CircleAlert className="h-5 w-5 text-red-500" />,
+          action: {
+            label: "OK",
+            onClick: () => toast.dismiss(),
+          },
+        });
+      });
+  };
+
+  // Handle chairperson selection from dropdown
+  const handleSelectChairperson = (user: { id: string; name: string }) => {
     form.setValue("chairperson", user.name);
     form.setValue("chairperson_id", user.id);
-    form.setValue("host", user.email);
-    setChairpersonOpen(false);
+    setChairpersonId(user.id);
+
+    setExistingChairpersons((prev) => {
+      if (!prev.find((p) => p.id === user.id)) {
+        return [...prev, user];
+      }
+      return prev;
+    });
+
+    setIsDropdownOpen(false);
   };
 
-  const addParticipant = (email: string) => {
-    const current = form.getValues("participants");
-    if (!current.includes(email)) {
-      form.setValue("participants", [...current, email]);
-    }
-    setParticipantInput("");
-    setParticipantOpen(false);
+  // Handle adding a new chairperson
+  const handleAddNewChairperson = () => {
+    setIsDropdownOpen(false);
+    toast("Add new chairperson feature is under development.");
   };
-
-  /* ---------------- UI ---------------- */
 
   return (
-    <motion.div className="w-full p-6">
+    <motion.div
+      key={2}
+      className={`w-full md:h-[31rem] lg:w-[41rem] shrink-0 md:p-6 md:px-4`}
+      initial={isMobileView ? {} : { x: "100%" }}
+      animate={{ x: 0 }}
+      exit={isMobileView ? {} : { x: "100%" }}
+      transition={{ duration: 0.2, ease: "easeInOut" }}
+    >
       <Form {...form}>
-        <form className="space-y-6">
-
-          {/* ---------------- CHAIRPERSON ---------------- */}
-          <FormField
-            control={form.control}
-            name="chairperson"
-            render={({ field }) => (
-              <FormItem ref={chairpersonRef} className="relative">
-                <FormLabel>Chairperson *</FormLabel>
-                <FormControl>
-                  <div className="relative">
-                    <Input
-                      {...field}
-                      placeholder="Select chairperson"
-                      onFocus={() => setChairpersonOpen(true)}
-                      onChange={(e) => {
-                        field.onChange(e);
-                        form.setValue("chairperson_id", "");
-                        form.setValue("host", "");
-                      }}
-                    />
-                    <ChevronDown className="absolute right-3 top-3 h-4 w-4 text-muted-foreground" />
-                  </div>
-                </FormControl>
-                <FormMessage />
-
-                {chairpersonOpen && (
-                  <div className="absolute z-30 mt-1 w-full bg-white dark:bg-slate-900 border rounded shadow max-h-48 overflow-auto">
-                    {isLoading ? (
-                      <div className="p-3 flex justify-center">
-                        <Spinner />
-                      </div>
-                    ) : (
-                      availableUsers.map((u) => (
-                        <div
-                          key={u.id}
-                          onMouseDown={() => selectChairperson(u)}
-                          className="p-2 text-sm hover:bg-blue-50 cursor-pointer"
-                        >
-                          {u.name}{" "}
-                          <span className="text-muted-foreground">
-                            ({u.email})
-                          </span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
-              </FormItem>
-            )}
-          />
-
-          {/* ---------------- PARTICIPANTS ---------------- */}
-          <div ref={participantRef} className="relative space-y-2">
-            <FormLabel>Add Participants</FormLabel>
-
-            <div className="flex flex-wrap gap-2">
-              {form.watch("participants").map((p) => (
-                <span
-                  key={p}
-                  className="bg-blue-100 px-2 py-1 rounded text-xs flex items-center gap-1"
-                >
-                  {p}
-                  <X
-                    className="h-3 w-3 cursor-pointer"
-                    onClick={() =>
-                      form.setValue(
-                        "participants",
-                        form
-                          .getValues("participants")
-                          .filter((x) => x !== p)
-                      )
-                    }
-                  />
-                </span>
-              ))}
+        <form
+          onSubmit={form.handleSubmit(onSubmit)}
+          className="space-y-6 h-full flex justify-between flex-col"
+        >
+          <div className="space-y-4">
+            <div className="flex gap-3 max-md:flex-col md:items-center md:justify-between">
+              <Typography variant="p" className="text-2xl">
+                Meeting Schedule
+              </Typography>
+              <Typography className="text-sm mt-1 text-blue-500 dark:text-blue-400">
+                <CalendarPlus className="inline-block w-4 h-4 mr-1 md:hidden" />
+                {formatDate(selectedDate, "d MMM, yyyy")}
+              </Typography>
             </div>
 
-            <Input
-              placeholder="Search user email"
-              value={participantInput}
-              onFocus={() => setParticipantOpen(true)}
-              onChange={(e) => setParticipantInput(e.target.value)}
+            {/* Chairperson field */}
+            <FormField
+              control={form.control}
+              name="chairperson"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel
+                    className={`${
+                      form.formState.errors.chairperson ? "text-red-500" : ""
+                    }`}
+                  >
+                    Chairperson{" "}
+                    <span className="text-red-500 dark:text-red-600">*</span>
+                  </FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <Input
+                        disabled={loading}
+                        className="active:ring-blue-400 focus-visible:ring-blue-400"
+                        placeholder="Select or Add Chairperson"
+                        {...field}
+                        onClick={() => setIsDropdownOpen(true)}
+                      />
+                      <Button
+                        type="button"
+                        className="absolute right-2 top-1/2 transform -translate-y-1/2"
+                        onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                        disabled={loading}
+                      >
+                        <ChevronDown />
+                      </Button>
+                      {isDropdownOpen && (
+                        <div className="absolute z-10 bg-white shadow-md border p-2 w-full mt-1 max-h-40 overflow-auto">
+                          <ul>
+                            {mergedChairpersons.length > 0 ? (
+                              mergedChairpersons.map((user) => (
+                                <li
+                                  key={user.id}
+                                  onClick={() => handleSelectChairperson(user)}
+                                  className="cursor-pointer p-1 hover:bg-blue-100"
+                                >
+                                  {user.name}
+                                </li>
+                              ))
+                            ) : (
+                              <li className="cursor-not-allowed p-1 text-gray-500">
+                                No internal users available
+                              </li>
+                            )}
+                            <li
+                              onClick={handleAddNewChairperson}
+                              className="cursor-pointer p-1 text-blue-500 hover:bg-blue-100"
+                            >
+                              Add New Chairperson
+                            </li>
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </FormControl>
+                  <FormMessage
+                    className={`${
+                      form.formState.errors.chairperson ? "text-red-500" : ""
+                    }`}
+                  />
+                </FormItem>
+              )}
             />
 
-            {participantOpen && (
-              <div className="absolute z-30 mt-1 w-full bg-white dark:bg-slate-900 border rounded shadow max-h-48 overflow-auto">
-                {availableUsers
-                  .filter((u) =>
-                    u.email
-                      ?.toLowerCase()
-                      .includes(participantInput.toLowerCase())
-                  )
-                  .map((u) => (
-                    <div
-                      key={u.id}
-                      onMouseDown={() => addParticipant(u.email)}
-                      className="p-2 text-sm hover:bg-blue-50 cursor-pointer"
+            {/* Host field */}
+            <FormField
+              control={form.control}
+              name="host"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel
+                    className={`${
+                      form.formState.errors.host ? "text-red-500" : ""
+                    }`}
+                  >
+                    Host{" "}
+                    <span className="text-red-500 dark:text-red-600">*</span>
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      disabled={loading}
+                      className={`active:ring-blue-400 focus-visible:ring-blue-400 ${
+                        form.formState.errors.host
+                          ? "active:ring-red-500 focus-visible:ring-red-500"
+                          : ""
+                      }`}
+                      placeholder="host@example.com"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage
+                    className={`${
+                      form.formState.errors.host ? "text-red-500" : ""
+                    }`}
+                  />
+                </FormItem>
+              )}
+            />
+
+            {/* Participants field */}
+            <div className="space-y-2">
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-auto hover:bg-blue-50 dark:hover:bg-blue-800/10 text-blue-500 dark:text-blue-400 hover:text-blue-600"
+                onClick={() => setIsParticipantsOpen(!isParticipantsOpen)}
+                disabled={loading}
+              >
+                {isParticipantsOpen ? "Hide Participants" : "+ Add Participants"}
+              </Button>
+
+              {isParticipantsOpen && (
+                <div className="space-y-2">
+                  <div className="relative">
+                    <Input
+                      placeholder="janedoe@hotmail.com, bob@gmail.com, etc."
+                      value={participantInput}
+                      className="active:ring-blue-400 focus-visible:ring-blue-400"
+                      onChange={(e) => setParticipantInput(e.target.value)}
+                      onKeyDown={handleParticipantKeyDown}
+                      onBlur={addParticipant}
+                      disabled={loading}
+                    />
+                    <Button
+                      type="button"
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2"
+                      onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                      disabled={loading}
                     >
-                      {u.name} — {u.email}
-                    </div>
-                  ))}
-              </div>
-            )}
+                      <ChevronDown />
+                    </Button>
+                    {isDropdownOpen && (
+                      <div className="absolute z-10 bg-white shadow-md border p-2 w-full mt-1 max-h-40 overflow-auto">
+                        <ul>
+                          {userDocs?.map((user) => (
+                            <li
+                              key={user.id}
+                              onClick={() => {
+                                const current = form.getValues("participants");
+                                if (!current.includes(user.email)) {
+                                  form.setValue("participants", [
+                                    ...current,
+                                    user.email,
+                                  ]);
+                                }
+                              }}
+                              className="cursor-pointer p-1 hover:bg-blue-100"
+                            >
+                              {user.name}
+                            </li>
+                          ))}
+                          <li
+                            onClick={() => {
+                              setIsDropdownOpen(false);
+                              addParticipant();
+                            }}
+                            className="cursor-pointer p-1 text-blue-500 hover:bg-blue-100"
+                          >
+                            Add New Participant
+                          </li>
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {form.watch("participants").map((participant) => (
+                      <div
+                        key={participant}
+                        className="flex items-center gap-1 px-2 py-1 bg-blue-500 dark:bg-blue-400 text-white dark:text-background rounded-full text-sm"
+                      >
+                        <span>{participant}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeParticipant(participant)}
+                          className="hover:text-blue-200"
+                        >
+                          <X className="h-3 w-3 dark:text-background" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
-          <Button type="submit" className="mt-4">
-            Schedule Meeting
-          </Button>
+          <div className="flex justify-between md:pt-4 max-md:h-14 max-md:fixed max-md:bottom-0 max-md:left-0 max-md:w-screen max-md:border max-md:z-10 max-md:bg-background max-md:border-top max-md:items-center max-md:px-4">
+            <Button
+              type="button"
+              className="text-blue-500 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-400 md:hover:bg-blue-50 md:dark:hover:bg-blue-800/10 max-md:px-0 max-md:hover:underline max-md:hover:bg-transparent"
+              onClick={onBack}
+              variant="ghost"
+              disabled={loading}
+            >
+              <ChevronLeft /> Back
+            </Button>
+            <Button
+              disabled={loading}
+              className="bg-blue-500 dark:bg-blue-400 hover:bg-blue-500 dark:hover:bg-blue-400"
+              type="submit"
+            >
+              {loading && <Spinner />} Schedule Meeting
+            </Button>
+          </div>
         </form>
       </Form>
     </motion.div>
