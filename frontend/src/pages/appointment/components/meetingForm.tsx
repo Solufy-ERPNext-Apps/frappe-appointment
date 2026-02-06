@@ -65,7 +65,7 @@ const MeetingForm = ({
   const { selectedDate, selectedSlot, timeZone } = useAppContext();
 
   // Replace with your actual user data source
-  const userDocs: { id: string; name: string; email: string }[] = []; // Populate with your actual user data
+  const userDocs: { id: string; name: string; email: string; is_enabled: boolean }[] = []; // Populate with your actual user data
 
   // State to hold existing chairpersons including selected one(s)
   const [existingChairpersons, setExistingChairpersons] = useState<
@@ -101,7 +101,7 @@ const MeetingForm = ({
   const mergedChairpersons = [
     ...existingChairpersons,
     ...userDocs.filter(
-      (user) => !existingChairpersons.some((ec) => ec.id === user.id)
+      (user) => !existingChairpersons.some((ec) => ec.id === user.id) && user.is_enabled // Make sure to only show enabled internal users
     ),
   ];
 
