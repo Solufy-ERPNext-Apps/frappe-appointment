@@ -9,25 +9,13 @@ import { formatDate } from "date-fns";
 import { toast } from "sonner";
 import { useSearchParams } from "react-router-dom";
 
-/**
- * Internal dependencies.
- */
+// Internal dependencies
 import { Button } from "@/components/button";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/form";
 import { Input } from "@/components/input";
 import Typography from "@/components/typography";
 import { useAppContext } from "@/context/app";
-import {
-  getTimeZoneOffsetFromTimeZoneString,
-  parseFrappeErrorMsg,
-} from "@/lib/utils";
+import { getTimeZoneOffsetFromTimeZoneString, parseFrappeErrorMsg } from "@/lib/utils";
 import Spinner from "@/components/spinner";
 
 // Form schema using zod
@@ -265,7 +253,7 @@ const MeetingForm = ({
                                   onClick={() => handleSelectChairperson(user)}
                                   className="cursor-pointer p-1 hover:bg-blue-100"
                                 >
-                                  {user.name} {/* Displaying user name for chairperson */}
+                                  {user.name}
                                 </li>
                               ))
                             ) : (
@@ -377,7 +365,7 @@ const MeetingForm = ({
                               }}
                               className="cursor-pointer p-1 hover:bg-blue-100"
                             >
-                              {user.email} {/* Displaying user email for participants */}
+                              {user.email}
                             </li>
                           ))}
                           <li
