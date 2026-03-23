@@ -175,7 +175,7 @@ const MeetingForm = ({
                       form.formState.errors.fullName ? "text-red-500" : ""
                     }`}
                   >
-                    Full Name{" "}
+                    Chairperson{" "}
                     <span className="text-red-500 dark:text-red-600">*</span>
                   </FormLabel>
                   <FormControl>
@@ -209,7 +209,7 @@ const MeetingForm = ({
                       form.formState.errors.email ? "text-red-500" : ""
                     }`}
                   >
-                    Email{" "}
+                    Host{" "}
                     <span className="text-red-500 dark:text-red-600">*</span>
                   </FormLabel>
                   <FormControl>
@@ -241,7 +241,7 @@ const MeetingForm = ({
                 onClick={() => setIsGuestsOpen(!isGuestsOpen)}
                 disabled={loading}
               >
-                {isGuestsOpen ? "Hide Guests" : "+ Add Guests"}
+                {isGuestsOpen ? "Hide Participants" : "+ Add Participants"}
               </Button>
 
               {isGuestsOpen && (
